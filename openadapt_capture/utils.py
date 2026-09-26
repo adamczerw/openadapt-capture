@@ -43,16 +43,42 @@ def get_process_local_sct() -> mss.mss:
     return _process_local.sct
 
 
-def get_monitor_dims() -> tuple[int, int]:
-    """Get the dimensions of the monitor.
+def list_monitors() -> list[dict]:
+    """Return all mss monitor dicts.
+
+    monitors[0] is the virtual bounding box of all monitors combined.
+    monitors[1] is the primary monitor, monitors[2] the secondary, etc.
+    """
+    return list(get_process_local_sct().monitors)
+
+
+def get_monitor_info(monitor_index: int | None = None) -> dict:
+    """Return the mss monitor dict for the given index.
+
+    Args:
+        monitor_index: mss index (0=all combined, 1=primary, 2=secondary, …).
+            Defaults to config.MONITOR_INDEX.
+    """
+    from openadapt_capture.config import config as _config
+    idx = monitor_index if monitor_index is not None else _config.MONITOR_INDEX
+    monitors = get_process_local_sct().monitors
+    if 0 <= idx < len(monitors):
+        return monitors[idx]
+    logger.warning(f"Monitor index {idx} out of range (have {len(monitors)}), using 0")
+    return monitors[0]
+
+
+def get_monitor_dims(monitor_index: int | None = None) -> tuple[int, int]:
+    """Get the dimensions of the selected monitor.
+
+    Args:
+        monitor_index: mss index. Defaults to config.MONITOR_INDEX.
 
     Returns:
         tuple[int, int]: The width and height of the monitor.
     """
-    monitor = get_process_local_sct().monitors[0]
-    monitor_width = monitor["width"]
-    monitor_height = monitor["height"]
-    return monitor_width, monitor_height
+    monitor = get_monitor_info(monitor_index)
+    return monitor["width"], monitor["height"]
 
 
 def set_start_time(value: float = None) -> float:
@@ -91,18 +117,19 @@ def get_timestamp() -> float:
     return _start_time + perf_duration
 
 
-def take_screenshot() -> Image.Image:
-    """Take a screenshot.
+def take_screenshot(monitor_index: int | None = None) -> Image.Image:
+    """Take a screenshot of the selected monitor.
+
+    Args:
+        monitor_index: mss index. Defaults to config.MONITOR_INDEX.
 
     Returns:
         PIL.Image: The screenshot image.
     """
-    # monitor 0 is all in one
     sct = get_process_local_sct()
-    monitor = sct.monitors[0]
+    monitor = get_monitor_info(monitor_index)
     sct_img = sct.grab(monitor)
-    image = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
-    return image
+    return Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
 
 
 def get_double_click_interval_seconds() -> float:

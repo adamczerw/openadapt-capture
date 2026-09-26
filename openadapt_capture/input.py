@@ -426,15 +426,19 @@ class ScreenCapturer:
         self,
         callback: Callable[[Any, float], None],
         fps: float = 24.0,
+        monitor_index: int | None = None,
     ) -> None:
         """Initialize screen capturer.
 
         Args:
             callback: Function called with (image, timestamp) for each frame.
             fps: Target frames per second.
+            monitor_index: mss monitor index (0=all, 1=primary, 2=secondary, …).
+                Defaults to config.MONITOR_INDEX.
         """
         self.callback = callback
         self.fps = fps
+        self.monitor_index = monitor_index
         self._interval = 1.0 / fps
         self._running = False
         self._thread: threading.Thread | None = None
@@ -458,8 +462,11 @@ class ScreenCapturer:
             # https://github.com/BoboTiG/python-mss/issues/179#issuecomment-673292002
             mss.windows.CAPTUREBLT = 0
 
+        from openadapt_capture.config import config as _config
         sct = mss.mss()
-        monitor = sct.monitors[0]  # All monitors combined
+        idx = self.monitor_index if self.monitor_index is not None else _config.MONITOR_INDEX
+        monitors = sct.monitors
+        monitor = monitors[idx] if 0 <= idx < len(monitors) else monitors[0]
 
         while not self._stop_event.is_set():
             timestamp = _get_timestamp()

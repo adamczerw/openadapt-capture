@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     # Maximum screenshots per second (0 = unlimited / legacy behavior)
     SCREEN_CAPTURE_FPS: float = 10.0
 
+    # Monitor to capture: 0 = all monitors combined, 1 = primary, 2 = secondary, …
+    # Matches mss monitor indexing (sct.monitors[MONITOR_INDEX]).
+    MONITOR_INDEX: int = 0
+
     # Performance plotting
     PLOT_PERFORMANCE: bool = True
 
@@ -93,6 +97,7 @@ _FIELD_TO_CONFIG_ATTR = {
     "log_memory": "LOG_MEMORY",
     "plot_performance": "PLOT_PERFORMANCE",
     "screen_capture_fps": "SCREEN_CAPTURE_FPS",
+    "monitor_index": "MONITOR_INDEX",
 }
 
 
@@ -112,6 +117,7 @@ class RecordingConfig:
     log_memory: bool | None = None
     plot_performance: bool | None = None
     screen_capture_fps: float | None = None
+    monitor_index: int | None = None
 
 
 @contextmanager

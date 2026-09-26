@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## Unreleased
+
+### Bug Fixes
+
+- Exclude the keyboard stop sequence from loaded capture events
+  ([`bffc13f`](https://github.com/adamczerw/openadapt-capture/commit/bffc13fd2ac698289b81f489a7ba9824cc5e6b42))
+
+When a recording is stopped from the keyboard (e.g. Ctrl x3 or a typed stop string), those key
+  presses are no longer returned as the last events of the recording.
+
+- Prevent recorder shutdown hang when the event queue is empty
+  ([`800ff31`](https://github.com/adamczerw/openadapt-capture/commit/800ff3175d9e53b44560fb3a48fa3d3ca3f0350b))
+
+process_events() now polls the queue with a 0.1 s timeout so it notices terminate_processing even
+  when no events arrive.
+
+### Features
+
+- Record a single monitor on multi-monitor setups
+  ([`fced6c6`](https://github.com/adamczerw/openadapt-capture/commit/fced6c6cfebf9188ea77ec45d839d206baca57c1))
+
+New MONITOR_INDEX setting (0 = all combined, 1 = primary, 2 = secondary, ...), exposed as
+  Recorder(monitor_index=...) and `capture record --monitor N`, plus a `capture monitors` command.
+  Screenshots and video use the selected monitor; mouse events outside it are dropped and
+  coordinates are stored relative to its top-left corner.
+
+
 ## v0.5.2 (2026-03-17)
 
 ### Bug Fixes

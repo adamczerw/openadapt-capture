@@ -19,6 +19,7 @@ def record(
     images: bool = False,
     browser_events: bool = False,
     send_profile: bool = False,
+    monitor: int = 0,
 ) -> None:
     """Record GUI interactions.
 
@@ -32,12 +33,31 @@ def record(
             Requires the openadapt-capture Chrome extension to be installed and
             connects via WebSocket on localhost:8765.
         send_profile: Send profiling data via wormhole after recording (default: False).
+        monitor: Monitor index to capture (default: 0 = all monitors combined).
+            Use 1 for the primary monitor, 2 for the secondary, etc.
+            Run `capture monitors` to list available monitors.
     """
     import time
 
     from openadapt_capture.recorder import Recorder
+    from openadapt_capture.utils import list_monitors
 
     output_dir = str(Path(output_dir).resolve())
+
+    monitors = list_monitors()
+    # monitors[0] is the virtual desktop; physical monitors start at index 1
+    num_physical = len(monitors) - 1
+    if num_physical > 1:
+        print("Available monitors:")
+        for i, m in enumerate(monitors):
+            label = "all monitors combined" if i == 0 else f"monitor {i}"
+            marker = " <-- selected" if i == monitor else ""
+            print(f"  {i}: {label}  ({m['width']}x{m['height']} at {m['left']},{m['top']}){marker}")
+        print()
+
+    if monitor < 0 or monitor >= len(monitors):
+        print(f"Error: monitor index {monitor} is out of range (0–{len(monitors)-1}).")
+        return
 
     print(f"Recording to: {output_dir}")
     if browser_events:
@@ -54,6 +74,7 @@ def record(
         capture_images=images,
         capture_browser_events=browser_events,
         send_profile=send_profile,
+        monitor_index=monitor,
     ) as recorder:
         recorder.wait_for_ready()
         try:
@@ -390,6 +411,20 @@ def share(action: str, path_or_code: str, output_dir: str = ".") -> None:
         print(f"Unknown action: {action}. Use 'send' or 'receive'.")
 
 
+def monitors() -> None:
+    """List available monitors and their indices.
+
+    Use the index with: capture record ./output --monitor <index>
+    """
+    from openadapt_capture.utils import list_monitors
+
+    mons = list_monitors()
+    print("Available monitors (use index with --monitor):")
+    for i, m in enumerate(mons):
+        label = "all monitors combined" if i == 0 else f"monitor {i}"
+        print(f"  {i}: {label}  ({m['width']}x{m['height']} at {m['left']},{m['top']})")
+
+
 def main() -> None:
     """CLI entry point."""
     import fire
@@ -399,6 +434,7 @@ def main() -> None:
         "info": info,
         "transcribe": transcribe,
         "share": share,
+        "monitors": monitors,
     })
 
 

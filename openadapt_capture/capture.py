@@ -23,6 +23,7 @@ from openadapt_capture.browser_events import (
     NavigationType,
     SemanticElementRef,
 )
+from openadapt_capture.config import config
 from openadapt_capture.events import (
     ActionEvent as PydanticActionEvent,
 )
@@ -42,6 +43,43 @@ if TYPE_CHECKING:
     from PIL import Image
 
     from openadapt_capture.browser_events import BrowserEvent
+
+
+def _strip_trailing_stop_sequence(
+    events: list,
+    stop_sequences: list[list[str]],
+) -> list:
+    """Remove trailing key events that form a complete stop sequence.
+
+    When a recording is stopped via keyboard (e.g. Ctrl×3), those key presses
+    are the last events in the DB. They are meta-actions for the recorder, not
+    part of the task, and would confuse a GUI agent replaying the session.
+    """
+    def _key_id(event) -> str | None:
+        # Use canonical form: pynput normalises ctrl_l/ctrl_r → ctrl, etc.
+        if event.canonical_key_name:
+            return event.canonical_key_name
+        return event.canonical_key_char or event.key_char
+
+    # Walk backwards to find the contiguous trailing block of key events.
+    cut = len(events)
+    for i in range(len(events) - 1, -1, -1):
+        if isinstance(events[i], (KeyDownEvent, KeyUpEvent)):
+            cut = i
+        else:
+            break
+
+    tail = events[cut:]
+    if not tail:
+        return events
+
+    down_key_ids = [_key_id(e) for e in tail if isinstance(e, KeyDownEvent)]
+
+    for stop_seq in stop_sequences:
+        if down_key_ids == stop_seq:
+            return events[:cut]
+
+    return events
 
 
 def _convert_action_event(db_event) -> PydanticActionEvent | None:
@@ -549,7 +587,7 @@ class CaptureSession:
             pydantic_event = _convert_action_event(db_event)
             if pydantic_event is not None:
                 events.append(pydantic_event)
-        return events
+        return _strip_trailing_stop_sequence(events, config.STOP_SEQUENCES)
 
     def actions(self, include_moves: bool = False) -> Iterator[Action]:
         """Iterate over processed actions.
