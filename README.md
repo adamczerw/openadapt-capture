@@ -72,6 +72,22 @@ with Recorder("./my_capture", task_description="Demo task") as recorder:
     input("Press Enter to stop recording...")
 ```
 
+### Multi-Monitor Setups
+
+By default the whole virtual desktop (all monitors combined) is recorded. To record a single monitor, pass its index (`0` = all combined, `1` = primary, `2` = secondary, …):
+
+```bash
+capture monitors                              # list available monitors and their indices
+capture record ./my_capture --monitor 2
+```
+
+```python
+with Recorder("./my_capture", monitor_index=2) as recorder:
+    ...
+```
+
+Mouse events outside the selected monitor are ignored, and coordinates are stored relative to the monitor's top-left corner so they match the screenshots. The default can also be set with the `MONITOR_INDEX` environment variable.
+
 ### Replay / Analysis
 
 ```python

@@ -142,9 +142,6 @@ NUM_MEMORY_STATS_TO_LOG = 3
 stop_sequence_detected = False
 ws_server_instance = None
 
-# TODO XXX replace with utils.get_monitor_dims() once fixed
-monitor_width, monitor_height = utils.take_screenshot().size
-
 
 def collect_stats(performance_snapshots: list[tracemalloc.Snapshot]) -> None:
     """Collects and appends performance snapshots using tracemalloc.
@@ -550,7 +547,9 @@ def video_pre_callback(
     """
     video_file_path = video.get_video_file_path(recording.timestamp, video_dir)
     video_container, video_stream, video_start_timestamp = (
-        video.initialize_video_writer(video_file_path, monitor_width, monitor_height)
+        video.initialize_video_writer(
+            video_file_path, recording.monitor_width, recording.monitor_height
+        )
     )
     crud.update_video_start_time(db, recording, video_start_timestamp)
     return {
@@ -669,7 +668,33 @@ def trigger_action_event(
     event_q.put(Event(utils.get_timestamp(), "action", action_event_args))
 
 
-def on_move(event_q: queue.Queue, x: int, y: int, injected: bool = False) -> None:
+def _translate_coords(
+    x: int, y: int, monitor_bounds: dict | None
+) -> tuple[int, int] | None:
+    """Translate absolute coords to monitor-relative coords, or None to drop the event.
+
+    When monitor_bounds is None (all-monitors mode), coordinates pass through unchanged.
+    When monitor_bounds is set, events outside that monitor are dropped (return None)
+    and events inside are translated so (0, 0) is the monitor's top-left corner.
+    """
+    if monitor_bounds is None:
+        return x, y
+    left = monitor_bounds["left"]
+    top = monitor_bounds["top"]
+    width = monitor_bounds["width"]
+    height = monitor_bounds["height"]
+    if not (left <= x < left + width and top <= y < top + height):
+        return None  # mouse is on a different monitor
+    return x - left, y - top
+
+
+def on_move(
+    event_q: queue.Queue,
+    x: int,
+    y: int,
+    injected: bool = False,
+    monitor_bounds: dict | None = None,
+) -> None:
     """Handles the 'move' event.
 
     Args:
@@ -677,12 +702,17 @@ def on_move(event_q: queue.Queue, x: int, y: int, injected: bool = False) -> Non
         x: The x-coordinate of the mouse.
         y: The y-coordinate of the mouse.
         injected: Whether the event was injected or not.
+        monitor_bounds: mss monitor dict for the selected monitor; None = all monitors.
 
     Returns:
         None
     """
     logger.debug(f"{x=} {y=} {injected=}")
     if not injected:
+        coords = _translate_coords(x, y, monitor_bounds)
+        if coords is None:
+            return
+        x, y = coords
         trigger_action_event(
             event_q,
             {"name": "move", "mouse_x": x, "mouse_y": y},
@@ -696,6 +726,7 @@ def on_click(
     button: mouse.Button,
     pressed: bool,
     injected: bool = False,
+    monitor_bounds: dict | None = None,
 ) -> None:
     """Handles the 'click' event.
 
@@ -706,12 +737,17 @@ def on_click(
         button: The mouse button.
         pressed: Whether the button is pressed or released.
         injected: Whether the event was injected or not.
+        monitor_bounds: mss monitor dict for the selected monitor; None = all monitors.
 
     Returns:
         None
     """
     logger.debug(f"{x=} {y=} {button=} {pressed=} {injected=}")
     if not injected:
+        coords = _translate_coords(x, y, monitor_bounds)
+        if coords is None:
+            return
+        x, y = coords
         trigger_action_event(
             event_q,
             {
@@ -731,6 +767,7 @@ def on_scroll(
     dx: int,
     dy: int,
     injected: bool = False,
+    monitor_bounds: dict | None = None,
 ) -> None:
     """Handles the 'scroll' event.
 
@@ -741,12 +778,17 @@ def on_scroll(
         dx: The horizontal scroll amount.
         dy: The vertical scroll amount.
         injected: Whether the event was injected or not.
+        monitor_bounds: mss monitor dict for the selected monitor; None = all monitors.
 
     Returns:
         None
     """
     logger.debug(f"{x=} {y=} {dx=} {dy=} {injected=}")
     if not injected:
+        coords = _translate_coords(x, y, monitor_bounds)
+        if coords is None:
+            return
+        x, y = coords
         trigger_action_event(
             event_q,
             {
@@ -1170,10 +1212,14 @@ def read_mouse_events(
     """
     utils.set_start_time(recording.timestamp)
 
+    # Only translate/filter coordinates when capturing a single monitor.
+    # monitors[0] is the virtual desktop (all monitors combined) — no translation needed.
+    monitor_bounds = utils.get_monitor_info() if config.MONITOR_INDEX > 0 else None
+
     mouse_listener = mouse.Listener(
-        on_move=partial(on_move, event_q),
-        on_click=partial(on_click, event_q),
-        on_scroll=partial(on_scroll, event_q),
+        on_move=partial(on_move, event_q, monitor_bounds=monitor_bounds),
+        on_click=partial(on_click, event_q, monitor_bounds=monitor_bounds),
+        on_scroll=partial(on_scroll, event_q, monitor_bounds=monitor_bounds),
     )
     mouse_listener.start()
 
@@ -1899,6 +1945,7 @@ class Recorder:
         log_memory: bool | None = None,
         plot_performance: bool | None = None,
         screen_capture_fps: float | None = None,
+        monitor_index: int | None = None,
         send_profile: bool = False,
     ) -> None:
         from pathlib import Path
@@ -1923,6 +1970,7 @@ class Recorder:
             log_memory=log_memory,
             plot_performance=plot_performance,
             screen_capture_fps=screen_capture_fps,
+            monitor_index=monitor_index,
         )
 
         # Shared state for cross-thread communication
