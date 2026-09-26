@@ -255,7 +255,10 @@ def process_events(
     prev_saved_window_timestamp = 0
     started = False
     while not terminate_processing.is_set() or not event_q.empty():
-        event = event_q.get()
+        try:
+            event = event_q.get(timeout=0.1)
+        except queue.Empty:
+            continue
         if not started:
             started_event.set()
             started = True
